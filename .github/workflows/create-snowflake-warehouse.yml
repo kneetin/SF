@@ -50,7 +50,7 @@ jobs:
         run: |
           snow sql \
             --connection github \
-            --filename snowflake/create_warehouse.sql
+            --filename SF/create_warehouse.sql
 
       - name: Cleanup
         if: always()
