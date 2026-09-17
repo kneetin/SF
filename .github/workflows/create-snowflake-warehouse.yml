@@ -2,90 +2,55 @@ name: Create Snowflake Warehouse
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Snowflake environment
-        required: true
-        default: dev
-        type: choice
-        options:
-          - dev
-          - pltdev
-          - prod
-
-permissions:
-  contents: read
 
 jobs:
   create-warehouse:
-    name: Create Snowflake Warehouse
     runs-on: ubuntu-latest
 
-    environment: ${{ inputs.environment }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@v4
 
-      - name: Install Snowflake CLI
-        uses: snowflakedb/snowflake-actions@v3
+      - uses: snowflakedb/snowflake-actions@v3
         with:
           cli-version: "3.16"
 
-      - name: Create private-key file
-        shell: bash
-        env:
-          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-
-          mkdir -p "${HOME}/.snowflake"
-          printf '%s\n' "${SNOWFLAKE_PRIVATE_KEY}" \
-            > "${HOME}/.snowflake/rsa_key.p8"
-
-          chmod 600 "${HOME}/.snowflake/rsa_key.p8"
-
-      - name: Configure Snowflake connection
-        shell: bash
+      - name: Create Snowflake config
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
-          set -euo pipefail
+          mkdir -p ~/.snowflake
 
-          cat > "${HOME}/.snowflake/config.toml" <<EOF
+          cat > ~/.snowflake/config.toml << EOF
           default_connection_name = "github_actions"
 
           [connections.github_actions]
           account = "${SNOWFLAKE_ACCOUNT}"
           user = "${SNOWFLAKE_USER}"
-          authenticator = "SNOWFLAKE_JWT"
-          private_key_path = "${HOME}/.snowflake/rsa_key.p8"
+          password = "${SNOWFLAKE_PASSWORD}"
           role = "GITHUB_ACTIONS_WAREHOUSE_ADMIN"
+          warehouse = "COMPUTE_WH"
           EOF
 
-          chmod 600 "${HOME}/.snowflake/config.toml"
+          chmod 600 ~/.snowflake/config.toml
 
-      - name: Test Snowflake connection
-        shell: bash
+      - name: Test Connection
         run: |
-          set -euo pipefail
-          snow connection test \
-            --connection github_actions
+          snow connection test --connection github_actions
 
-      - name: Create or update warehouse
-        shell: bash
+      - name: Create Warehouse
         run: |
-          set -euo pipefail
           snow sql \
             --connection github_actions \
-            --filename snowflake/create_warehouse.sql
+            --query "
+            CREATE WAREHOUSE IF NOT EXISTS TEST_WH
+            WAREHOUSE_SIZE='XSMALL'
+            AUTO_SUSPEND=60
+            AUTO_RESUME=TRUE;
+            "
 
-      - name: Remove temporary authentication files
+      - name: Cleanup
         if: always()
-        shell: bash
         run: |
-          rm -f "${HOME}/.snowflake/rsa_key.p8"
-          rm -f "${HOME}/.snowflake/config.toml"
+          rm -f ~/.snowflake/config.toml
