@@ -29,7 +29,7 @@ jobs:
           account = "${SNOWFLAKE_ACCOUNT}"
           user = "${SNOWFLAKE_USER}"
           password = "${SNOWFLAKE_PASSWORD}"
-          role = "GITHUB_ACTIONS_WAREHOUSE_ADMIN"
+          role = "ACCOUNTADMIN"
           warehouse = "COMPUTE_WH"
           EOF
 
