@@ -1,20 +1,22 @@
-name: Create Snowflake Warehouse
+name: Deploy Snowflake Warehouse
 
 on:
   workflow_dispatch:
 
 jobs:
-  create-warehouse:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: snowflakedb/snowflake-actions@v3
+      - name: Install Snowflake CLI
+        uses: snowflakedb/snowflake-actions@v3
         with:
-          cli-version: "3.16"
+          cli-version: "latest"
 
-      - name: Create Snowflake config
+      - name: Create Snowflake Connection
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -23,32 +25,32 @@ jobs:
           mkdir -p ~/.snowflake
 
           cat > ~/.snowflake/config.toml << EOF
-          default_connection_name = "github_actions"
+          default_connection_name = "github"
 
-          [connections.github_actions]
+          [connections.github]
           account = "${SNOWFLAKE_ACCOUNT}"
           user = "${SNOWFLAKE_USER}"
           password = "${SNOWFLAKE_PASSWORD}"
-          role = "ACCOUNTADMIN"
-          warehouse = "COMPUTE_WH"
           EOF
 
           chmod 600 ~/.snowflake/config.toml
 
-      - name: Test Connection
-        run: |
-          snow connection test --connection github_actions
-
-      - name: Create Warehouse
+      - name: Validate Connection
         run: |
           snow sql \
-            --connection github_actions \
+            --connection github \
             --query "
-            CREATE WAREHOUSE IF NOT EXISTS TEST_WH
-            WAREHOUSE_SIZE='XSMALL'
-            AUTO_SUSPEND=60
-            AUTO_RESUME=TRUE;
+            SELECT
+              CURRENT_USER(),
+              CURRENT_ROLE(),
+              CURRENT_ACCOUNT();
             "
+
+      - name: Deploy SQL File
+        run: |
+          snow sql \
+            --connection github \
+            --filename snowflake/create_warehouse.sql
 
       - name: Cleanup
         if: always()
